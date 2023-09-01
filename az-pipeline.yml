@@ -1,0 +1,112 @@
+trigger:
+  batch: true
+  branches:
+    include:
+      - develop
+      - release/*
+      
+name: '$(SourceBranchName)_$(Date:yyyyMMdd)_$(Hours)_$(Minutes)_$(Rev:r)'
+
+parameters:
+- name: skipUnitTests
+  displayName: 'Skip unit tests'
+  type: boolean
+  default: false
+
+- name: buildStages
+  displayName: 'Build scheme'
+  type: string
+  default: Automatic
+  values:
+  - Automatic
+  - QA
+  - UAT
+  - Production
+
+variables:
+  isRelease: $[in(True, contains(variables['Build.SourceBranch'], 'release/'))]
+  isQA: $[in(True, eq(variables['Build.SourceBranchName'], 'develop'), contains(variables['Build.SourceBranch'], 'feature/'), contains(variables['Build.SourceBranch'], 'fix/'), contains(variables['Build.SourceBranch'], 'refactor/'), eq(variables['isRelease'], true))]
+  SONARQUBE_HOST_URL: https://dev.sqm.woolworths.com.au/
+  BUILD_WRAPPER_OUT_DIR: $(Build.ArtifactStagingDirectory)/build_wrapper_output_directory
+  UNZIP_PATH: 
+  XCODE_VERSION: /Applications/Xcode_14.1.app
+  SPM_CACHE_FOLDER: $(HOME)/Library/Caches/org.swift.swiftpm/repositories
+  SPM_CACHE_KEY: MyCountdown.xcworkspace/xcshareddata/swiftpm/Package.resolved
+
+stages:
+    - stage: Prepare_for_build_wrapper
+      pool:  azd-shared-rhel
+      displayName: 'Prepare for build'
+      jobs:
+      - job: Prepare_for_build
+        steps:
+        - checkout: none
+        - bash: |
+                        mkdir -p $(Build.ArtifactStagingDirectory)/.sonar
+                        mkdir -p $(BUILD_WRAPPER_OUT_DIR)
+                        echo "== $(BUILD_WRAPPER_OUT_DIR)"
+                        # curl --create-dirs -sSLo $(Build.ArtifactStagingDirectory)/.sonar/build-wrapper-macosx-x86.zip https://dev.sqm.woolworths.com.au/static/cpp/build-wrapper-macosx-x86.zip
+                        # echo "== $(Build.ArtifactStagingDirectory)"
+                        # unzip -o $(Build.ArtifactStagingDirectory)/.sonar/build-wrapper-macosx-x86.zip -d $(Build.ArtifactStagingDirectory)/.sonar/
+                        curl 'https://sqm.woolworths.com.au/static/cpp/build-wrapper-macosx-x86.zip' --output build-wrapper.zip
+                        unzip build-wrapper.zip
+                        ls -la
+                        echo "unzips = $(Build.ArtifactStagingDirectory)/.sonar/build-wrapper-macosx-x86"
+                        ls -p | grep -v $(Build.ArtifactStagingDirectory)/.sonar/build-wrapper-macosx-x86/
+                        find $(Build.ArtifactStagingDirectory)/.sonar/build-wrapper-macosx-x86 -maxdepth 1 -type f
+
+        - task: PublishPipelineArtifact@1
+          inputs:
+            artifactName: 'UATUNZipArtifact'
+            targetPath:  $(Build.ArtifactStagingDirectory)/.sonar/build-wrapper-macosx-x86
+          condition: succeeded()
+                     
+    - stage: MAC_OS_build
+      pool:
+       vmImage: macOS-latest  
+      displayName: 'Prepare for build MacOS'
+      jobs:
+      - job: Prepare_for_build2
+        steps:
+#        - checkout: none
+        #- task: DownloadPipelineArtifact@2
+        #  inputs:
+        #    artifactName: 'UATUNZipArtifact'
+        #    targetPath: $(Pipeline.Workspace)
+        - bash: |
+                        echo "unzip again = $(Pipeline.Workspace)/build-wrapper-macosx-x86"
+                        cd $(Build.SourcesDirectory)
+                        chmod 755 $(Build.SourcesDirectory)/build-wrapper-macosx-x86
+                        chmod 755 $(Build.SourcesDirectory)/libinterceptor.dylib
+                        ls -la
+                        ls -p | grep -v $(Build.SourcesDirectory)/build-wrapper-macosx-x86
+                        find $(Build.SourcesDirectory) -maxdepth 1 -type f
+                        echo "check /sourcedir dir"
+                        ls -la $(Build.SourcesDirectory)/s
+                        echo " copy wrapper to =$(Build.SourcesDirectory)"
+                        #cp -r $(Pipeline.Workspace)/build-wrapper-macosx-x86 $(Build.SourcesDirectory)
+                        #cp -r $(Pipeline.Workspace)/libinterceptor.dylib $(Build.SourcesDirectory)
+                        #cd $(Build.SourcesDirectory)
+                        echo "build_output = $(BUILD_WRAPPER_OUT_DIR)"
+                        $(Build.SourcesDirectory)/build-wrapper-macosx-x86 --out-dir $(BUILD_WRAPPER_OUT_DIR) xcodebuild
+  
+    - stage: SonarQube_Scanning
+      pool:  azd-shared-rhel 
+      jobs:
+      - job: SonarQube_Scanning
+        displayName: SonarQube_Scanning
+        steps:
+        #  Prepare Analysis Configuration task
+          - task: SonarQubePrepare@5
+            inputs:
+              SonarQube: 'sonarqube-dev_ios'
+              scannerMode: 'CLI'
+              configMode: 'manual'
+              cliProjectKey: 'myCountdown-App-iOS'
+              cliProjectName: 'myCountdown-App-iOS'
+              cliSources: '.'
+              extraProperties: "sonar.cfamily.build-wrapper-output=$(Build.ArtifactStagingDirectory)/build_wrapper_output_directory"
+          - task: SonarQubeAnalyze@5
+          - task: SonarQubePublish@5
+            inputs:
+              pollingTimeoutSec: '300'
