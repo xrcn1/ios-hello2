@@ -99,7 +99,7 @@ stages:
         #  Prepare Analysis Configuration task
           - task: SonarQubePrepare@5
             inputs:
-              SonarQube: 'test-ios-compatibility'
+              SonarQube: 'sonar-dev-connection'
               scannerMode: 'CLI'
               configMode: 'manual'
               cliProjectKey: 'test-ios-compatibility'
