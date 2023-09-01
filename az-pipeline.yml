@@ -99,11 +99,11 @@ stages:
         #  Prepare Analysis Configuration task
           - task: SonarQubePrepare@5
             inputs:
-              SonarQube: 'sonarqube-dev_ios'
+              SonarQube: 'test-ios-compatibility'
               scannerMode: 'CLI'
               configMode: 'manual'
-              cliProjectKey: 'myCountdown-App-iOS'
-              cliProjectName: 'myCountdown-App-iOS'
+              cliProjectKey: 'test-ios-compatibility'
+              cliProjectName: 'test-ios-compatibility'
               cliSources: '.'
               extraProperties: "sonar.cfamily.build-wrapper-output=$(Build.ArtifactStagingDirectory)/build_wrapper_output_directory"
           - task: SonarQubeAnalyze@5
