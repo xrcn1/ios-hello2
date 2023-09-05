@@ -88,7 +88,7 @@ stages:
                         #cp -r $(Pipeline.Workspace)/libinterceptor.dylib $(Build.SourcesDirectory)
                         #cd $(Build.SourcesDirectory)
                         echo "build_output = $(BUILD_WRAPPER_OUT_DIR)"
-                        $(Build.SourcesDirectory)/build-wrapper-macosx-x86 --out-dir $(BUILD_WRAPPER_OUT_DIR) xcodebuild
+                        $(Build.SourcesDirectory)/build-wrapper-macosx-x86 --out-dir $(BUILD_WRAPPER_OUT_DIR) xcodebuild CODE_SIGNING_ALLOWED=NO
   
     - stage: SonarQube_Scanning
       pool:  azd-shared-rhel 
